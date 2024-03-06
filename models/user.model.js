@@ -24,6 +24,10 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING,
             allowNull: false,
         },
+        userAvatar: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        }
         // roleId: {
         //     type: DataTypes.INTEGER,
         //     defaultValue: 1

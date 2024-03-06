@@ -6,6 +6,13 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const createError = require("../../utils/createError");
 const catchAsync = require("../../utils/catchAsync");
+const path = require("path");
+const fs = require("fs");
+
+// EBS (Elastic Block Storage) Method
+const imageUpload = require("../../utils/imageUpload");
+// S3 (Simple Storage Service) Method
+const AwsS3 = require("../../utils/aws/s3Handler");
 
 const storeUser = catchAsync( async (req, res, next) => {
     const errors = validationResult(req);
@@ -15,12 +22,25 @@ const storeUser = catchAsync( async (req, res, next) => {
             error: errors.array()
         });
     }
+    var userAvatarUrl = "";
+    if(req.files.userAvatar) {
+        // EBS (Elastic Block Storage) Method
+        // userAvatarUrl = await imageUpload.uploadImage(req.files.userAvatar[0], 'user');
+
+        // S3 (Simple Storage Service) Method
+        let userAvatar = req.files.userAvatar[0];
+        let destinationPath = `uploads/user/avatar/`;
+        let imgName = Date.now() + '-' + userAvatar.originalname;
+        userAvatarUrl = destinationPath + imgName;
+        await AwsS3.s3Upload(userAvatar, userAvatarUrl);
+    }
 
     await User.create({
         firstName: req.body.firstName,
         lastName: req.body.lastName,
         email: req.body.email,
         password: bcrypt.hashSync(req.body.password),
+        userAvatar: userAvatarUrl,
         roleId: 1
     }).then(async user => {
         // await user.addRole(role);
@@ -29,7 +49,7 @@ const storeUser = catchAsync( async (req, res, next) => {
             msg: "User created successfully",
             user
         });
-    })
+    });
 });
 
 const loginUser = catchAsync( async (req, res, next) => {
@@ -91,13 +111,51 @@ const updateProfile = catchAsync( async (req, res, next) => {
         });
     }
 
-    await User.findByPk(req.user.id).then((userData) => {
+    await User.findByPk(req.user.id).then(async (userData) => {
         if(!userData) {
             return next(createError(422, "No User Data Found With This ID or Token!!"));
         }
+        userData.firstName = req.body.firstName.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
+        userData.lastName = req.body.lastName.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
+        // EBS (Elastic Block Storage) Method
+        // if(req.files.userAvatar) {
+        //     const userAvatar = req.files.userAvatar[0];
+        //     if(!imageUpload.fileFilter(userAvatar)){
+        //         return next(createError(422, "Please upload an Image .jpeg, .png"));
+        //     }
+        //     // console.log(path.join(__dirname, "../../"+userData.userAvatar));
+        //     console.log(path.join(__dirname, "../../public/user/1709716123189-5.jpg"));
+        //     let oldFilePath = path.join(__dirname, "../../public/user/1709716123189-5.jpg");
+        //     if(fs.existsSync(oldFilePath)){
+        //         console.log("File already exists. so, Deleting Now!!!");
+        //         fs.unlinkSync(oldFilePath);
+        //     }else {
+        //         console.log("File not found. so, Not Deleting!!");
+        //     }            
+        //     let userAvatarUrl = await imageUpload.uploadImage(userAvatar, 'user');
+        //     // userData.userAvatar = userAvatarUrl;
+        //     console.log(userAvatarUrl);
+        // }
 
-        userData.firstName = req.body.firstName;
-        userData.lastName = req.body.lastName;
+        // S3 (Simple Storage Service) Method
+        if(req.files.userAvatar){
+            const userAvatar = req.files.userAvatar[0];
+            if(!imageUpload.fileFilter(userAvatar)){
+                return next(createError(422, "Please upload an Image .jpeg, .png"));
+            }
+            // Delete the OLD file if it exists
+            if(userData.userAvatar) {
+                await AwsS3.s3Delete(userData.userAvatar);
+            }
+            let destinationPath = "uploads/user/avatar/";
+            let imgName = Date.now() + "-" + userAvatar.originalname;
+            let userAvatarUrl = destinationPath + imgName;
+            // New File Upload to S3
+            await AwsS3.s3Upload(userAvatar, userAvatarUrl);
+            // Update file Path
+            userData.userAvatar = userAvatarUrl;
+        }
+
         return userData.save();
     }).then((result) => {
         res.status(200).json({
@@ -106,9 +164,6 @@ const updateProfile = catchAsync( async (req, res, next) => {
             user: result
         });
     });
-
-
-
 });
 
 const getAllUsers = catchAsync( async (req, res, err) => {

@@ -18,7 +18,15 @@ const store = [
             throw new Error("Password Confirmation does not match password!");
         }
         return true;
-    })
+    }),
+    check("userAvatar").custom((value, {req}) => {
+    //   console.log(req.files); 
+      if(req.files.userAvatar[0].mimetype === 'image/jpeg' || req.files.userAvatar[0].mimetype === 'image/png' || req.files.userAvatar[0].mimetype === 'image/jpg') {
+        return true;
+      }else{
+        return false;
+      }
+    }).withMessage("Please upload an Image .jpeg, .png")
 ];
 
 const login = [
@@ -29,6 +37,14 @@ const login = [
 const updateProfile = [
     check("firstName", "first name is required!").notEmpty().custom(value => value.match(/^[A-Za-z ]+$/)).withMessage("is Alpha"),
     check("lastName", "lastName is required!").notEmpty().custom(value => value.match(/^[A-Za-z ]+$/)).withMessage("is Alpha"),
+    check("userAvatar").custom((value, {req}) => {
+        // console.log(req.files);
+        if(req.files.userAvatar[0].mimetype === "image/jpeg" || req.files.userAvatar[0].mimetype === "image/png" || req.files.userAvatar[0].mimetype === "image/jpg") {
+            return true;
+        }else {
+            return false;
+        }
+    }).withMessage("Please upload an Image .jpeg, .png")
 ];
 
 module.exports = {
