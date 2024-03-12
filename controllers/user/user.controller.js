@@ -8,6 +8,7 @@ const createError = require("../../utils/createError");
 const catchAsync = require("../../utils/catchAsync");
 const path = require("path");
 const fs = require("fs");
+const emailHelper = require("../../utils/mail/email");
 
 // EBS (Elastic Block Storage) Method
 const imageUpload = require("../../utils/imageUpload");
@@ -44,6 +45,11 @@ const storeUser = catchAsync( async (req, res, next) => {
         roleId: 1
     }).then(async user => {
         // await user.addRole(role);
+
+        // when u need Mail Verification UnComment Below this 2 line! 
+        // const msg = `Hi ${user.firstName}, Please <a href="http://127.0.0.1:3006/auth/mail-verification?id=${user.id}">Verify</a> Your Mail!.`;
+        // emailHelper.sendMail(user.email, "Mail Verification!", msg);
+
         return res.status(201).json({
             status: true,
             msg: "User created successfully",

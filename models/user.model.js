@@ -27,6 +27,10 @@ module.exports = (sequelize, DataTypes) => {
         userAvatar: {
             type: DataTypes.STRING,
             allowNull: true,
+        },
+        isVerified: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
         }
         // roleId: {
         //     type: DataTypes.INTEGER,
