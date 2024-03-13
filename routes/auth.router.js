@@ -19,4 +19,7 @@ router.get("/reset-password", authController.resetPassword);
 router.post("/reset-password", authController.updatePassword);
 router.get("/reset-success", authController.resetSuccess);
 
+// One Time OTP Verification Routes
+router.post("/verify-onetime-otp", verifyOtpValidator, authController.verifyOneTimeOtp);
+
 module.exports = router;

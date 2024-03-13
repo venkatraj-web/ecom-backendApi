@@ -14,6 +14,8 @@ const emailHelper = require("../../utils/mail/email");
 const imageUpload = require("../../utils/imageUpload");
 // S3 (Simple Storage Service) Method
 const AwsS3 = require("../../utils/aws/s3Handler");
+const { generateOtp6Digit, checkOtpIsExpired, threeMinuteExpiry } = require("../../utils/otpHandler");
+const generateAccessToken = require("../../utils/tokenHandler");
 
 const storeUser = catchAsync( async (req, res, next) => {
     const errors = validationResult(req);
@@ -72,26 +74,77 @@ const loginUser = catchAsync( async (req, res, next) => {
     if(!user){
         return next(createError(422, 'User not found'));
     }
-    await bcrypt.compare(req.body.password, user.password).then((doMatch) => {
-        if(!doMatch){
-            return next(createError(401, "Password Wrong!"));
-        }
 
-        const token = jwt.sign({
-            id: user.id,
-            name: user.firstName,
-            role: user.role.role
-        }, process.env.JWT_SECRET_KEY, {
-             expiresIn: process.env.JWT_EXPIRES_IN
+    const passwordMatch = await bcrypt.compare(req.body.password, user.password);
+    if(!passwordMatch) {
+        return next(createError(401, "Email and Password is Incorrect!"));
+    }
+    // Generate 6 Digit OneTime Login OTP
+    const g_otp = await generateOtp6Digit();
+    const otpData = await db.loginOtps.findOne({ where: { userId: user.id } });
+    if(otpData) {
+        // Waiting 3 Minutes for Resending OTP!
+        const sendNextOtp = await threeMinuteExpiry(otpData.updatedAt);
+        if(!sendNextOtp && !otpData.isVerified) {
+            return next(createError(400, "Pls try after some time(3 min)!"));
+        }
+        const isOtpExpired = await checkOtpIsExpired(otpData.updatedAt);
+        // console.log("isOtpExpired = " + isOtpExpired);
+        // if otp is verified and otp is not expired then send Tokenized Authentication!
+        if(!isOtpExpired && otpData.isVerified) {
+            const token = await generateAccessToken(user);
+            return res.status(200).json({
+                status: true,
+                otpSent: false,
+                msg:"Login Successfully!",
+                user,
+                accessToken: token,
+                tokenType: "Bearer",
+            });
+        }
+        // if otp is not verified or otp is expired then Generate New 6 Digit OTP!
+        otpData.otp = g_otp;
+        await otpData.save();
+    } else {
+        await db.loginOtps.create({
+            userId: user.id,
+            otp: g_otp,
+            isVerified: false,
         });
-        
-        return res.status(200).json({
-            status: true,
-            msg:"User successfully Logged in",
-            auth_token: token,
-            user
-        });
+    }
+
+    const html = '<p> Hi '+ user.firstName +', <br> Your Login OTP is <b>'+ g_otp +'</b> </p>';
+    // If you want to send OTP in your email then below line Uncomment it!
+    emailHelper.sendMail(user.email, "Login OTP", html);
+
+    return res.status(200).json({
+        status: true,
+        otpSent: true,
+        userId: user.id,
+        msg:"Login OTP has been sent to your mail!"
     });
+    
+    // Below commented line is Old Login Verify Method!
+    // await bcrypt.compare(req.body.password, user.password).then((doMatch) => {
+    //     if(!doMatch){
+    //         return next(createError(401, "Password Wrong!"));
+    //     }
+
+    //     const token = jwt.sign({
+    //         id: user.id,
+    //         name: user.firstName,
+    //         role: user.role.role
+    //     }, process.env.JWT_SECRET_KEY, {
+    //          expiresIn: process.env.JWT_EXPIRES_IN
+    //     });
+        
+    //     return res.status(200).json({
+    //         status: true,
+    //         msg:"User successfully Logged in",
+    //         auth_token: token,
+    //         user
+    //     });
+    // });
 });
 
 const userProfile = catchAsync( async (req, res, next) => {

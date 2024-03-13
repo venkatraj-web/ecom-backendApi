@@ -4,8 +4,9 @@ const emailHelper = require("../../utils/mail/email");
 const catchAsync = require("../../utils/catchAsync");
 const createError = require("../../utils/createError");
 const randomstring = require("randomstring");
-const { generateOtpDigit, oneMinuteExpiry, threeMinuteExpiry, customMinuteExpiry } = require("../../utils/otpHandler");
+const { generateOtpDigit, oneMinuteExpiry, threeMinuteExpiry, customMinuteExpiry, checkOtpIsExpired } = require("../../utils/otpHandler");
 const bcrypt = require("bcryptjs");
+const generateAccessToken = require("../../utils/tokenHandler");
 
 // Demo Mail Verification
 const sendMail2 = async (req, res, next) => {
@@ -111,6 +112,7 @@ const sendOtp = catchAsync(async (req, res, next) => {
     const g_otp = await generateOtpDigit();
     const oldOtpData = await db.otps.findOne({ where: { userId: userData.id }});
     if(oldOtpData){
+        // Waiting 1 Minutes for Resending OTP!
         const sendNextOtp = await oneMinuteExpiry(oldOtpData.updatedAt);
         if(!sendNextOtp) {
             return next(createError(400, "Pls try after some time!"));
@@ -265,6 +267,41 @@ const resetSuccess = catchAsync( async (req, res, next) => {
     return res.render("templates/reset-success");
 });
 
+// Verify One Time OTP 
+const verifyOneTimeOtp = catchAsync(async (req, res, next) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()){
+        return res.status(422).json({
+            status: false,
+            error: errors.array()
+        });
+    }
+    const { userId, otp } = req.body;
+    const otpData = await db.loginOtps.findOne({ where: { userId: userId, otp: otp }});
+    if(!otpData) {
+        return next(createError(422, "You have entered wrong OTP!"));
+    }
+    const isOtpExpired = await checkOtpIsExpired(otpData.updatedAt);
+    if(isOtpExpired) {
+        return next(createError(200, "Otp has been expired!"));
+    }
+    otpData.isVerified = true;
+    await otpData.save();
+
+    const userData = await db.users.findByPk(otpData.userId);
+    if(!userData) {
+        return next(createError(422, "user not found!"));
+    }
+    const token =await generateAccessToken(userData);
+    return res.status(200).json({
+        status: true,
+        msg: "Login successfully!",
+        user: userData,
+        accessToken: token,
+        tokenType: "Bearer",
+    });
+});
+
 module.exports = {
     sendMail2,
     mailVerification,
@@ -274,5 +311,6 @@ module.exports = {
     forgotPassword,
     resetPassword,
     updatePassword,
-    resetSuccess
+    resetSuccess,
+    verifyOneTimeOtp
 }
