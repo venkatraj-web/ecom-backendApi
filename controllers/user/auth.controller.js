@@ -277,6 +277,7 @@ const verifyOneTimeOtp = catchAsync(async (req, res, next) => {
         });
     }
     const { userId, otp } = req.body;
+    // Get OTP Data
     const otpData = await db.loginOtps.findOne({ where: { userId: userId, otp: otp }});
     if(!otpData) {
         return next(createError(422, "You have entered wrong OTP!"));
@@ -302,6 +303,101 @@ const verifyOneTimeOtp = catchAsync(async (req, res, next) => {
     });
 });
 
+
+//Twilio OTP implementation
+const otpGenerator = require("otp-generator");
+const twilio = require("twilio");
+const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN; 
+
+const twilioClient = new twilio(twilioAccountSid, twilioAuthToken);
+
+const sendMobileOtp = catchAsync( async(req, res, next) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()){
+        return res.status(422).json({
+            status: false,
+            error: errors.array()
+        });
+    }
+    const{ phoneNumber } = req.body;
+    // Generate Random  OTP Strings! 
+    const mobileOtp = await otpGenerator.generate(6, { upperCaseAlphabets: false, specialChars: false, digits: false });
+    // Get OTP Data
+    const oldMobileOtpData = await db.mobileOtps.findOne({ where: { phoneNumber: phoneNumber }});
+    if(oldMobileOtpData){
+        if(oldMobileOtpData.isVerified){
+            return res.status(200).json({
+                status: true,
+                msg: oldMobileOtpData.phoneNumber + " Phone Number is already verified!"
+            });
+        }
+        // Waiting 1 Minutes for Resending OTP!
+        const sendNextOtp = await oneMinuteExpiry(oldMobileOtpData.updatedAt);
+        console.log(sendNextOtp);
+        if(!sendNextOtp) {
+            return next(createError(400, "Plz try after some time! (1 minute)"));
+        }
+        // if otp is expired in 1 minute then send next!
+        oldMobileOtpData.otp = mobileOtp;
+        await oldMobileOtpData.save();
+    } else {
+        await db.mobileOtps.create({
+            phoneNumber: phoneNumber,
+            otp: mobileOtp
+        });
+    }
+    // Twilio OTP Instance Setup
+    // const twilioOtpResult = await twilioClient.messages.create({
+    //     body: `Your OTP is: ${mobileOtp} madhu mitha`,
+    //     to: phoneNumber,
+    //     from: process.env.TWILIO_PHONE_NUMBER
+    // });
+
+    return res.status(200).json({
+        status: true,
+        msg: mobileOtp + " - OTP sent successfully!",
+        // twilioOtpResult
+    });
+});
+
+const verifyMobileOtp = catchAsync( async (req, res, next) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()){
+        return res.status(422).json({
+            status: false,
+            error: errors.array()
+        });
+    }
+
+    const { phoneNumber, otp } = req.body;
+    // Get OTP Data
+    const oldOtpData = await db.mobileOtps.findOne({ where: { phoneNumber: phoneNumber, otp: otp } });
+    if(!oldOtpData){
+        return next(createError(422, "You have entered Wrong OTP!"));
+    }
+    // Check OTP & its verified or not!
+    if(oldOtpData.isVerified){
+        return res.status(200).json({
+            status: true,
+            msg: oldOtpData.phoneNumber + " Phone Number is already verified!"
+        });
+    }
+    // check otp is expired in 10 minute or not!
+    const isOtpExpired = await customMinuteExpiry(oldOtpData.updatedAt, 10);
+    if(isOtpExpired){
+        return next(createError(422, "otp has been expired!"));
+    }
+    // if otp is not expired in 10 minute then Verified OTP!
+    oldOtpData.isVerified = true;
+    await oldOtpData.save();
+
+    return res.status(200).json({
+        status: true,
+        msg: "OTP Verified Successfully!"
+    });
+});
+
 module.exports = {
     sendMail2,
     mailVerification,
@@ -312,5 +408,7 @@ module.exports = {
     resetPassword,
     updatePassword,
     resetSuccess,
-    verifyOneTimeOtp
+    verifyOneTimeOtp,
+    sendMobileOtp,
+    verifyMobileOtp
 }

@@ -16,3 +16,12 @@ exports.verifyOtpValidator = [
 exports.passwordResetValidator = [
     check("email", "Please include a valid email address!").isEmail().normalizeEmail({gmail_remove_dots:false})
 ];
+
+exports.mobileOtpValidator = [
+    check("phoneNumber", "Phone Number is required!").notEmpty().isLength({ min: 10, }),
+];
+
+exports.verifyMobileOtpValidator = [
+    check("phoneNumber", "Phone Number is required!").notEmpty().isLength({ min: 10, }),
+    check("otp", "Otp is required!").notEmpty()
+];

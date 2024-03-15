@@ -1,7 +1,7 @@
 const router = require("express").Router();
 
 const authController = require("../controllers/user/auth.controller");
-const { sendMailVerificationValidator, sendOtpMailValidator, verifyOtpValidator, passwordResetValidator } = require("../middlewares/auth/mail.validator");
+const { sendMailVerificationValidator, sendOtpMailValidator, verifyOtpValidator, passwordResetValidator, mobileOtpValidator, verifyMobileOtpValidator } = require("../middlewares/auth/mail.validator");
 
 // Demo Mail Verification Routes
 router.post("/send-mail", authController.sendMail2);
@@ -21,5 +21,7 @@ router.get("/reset-success", authController.resetSuccess);
 
 // One Time OTP Verification Routes
 router.post("/verify-onetime-otp", verifyOtpValidator, authController.verifyOneTimeOtp);
+router.post("/send-mobile-otp", mobileOtpValidator, authController.sendMobileOtp);
+router.post("/verify-mobile-otp", verifyMobileOtpValidator, authController.verifyMobileOtp);
 
 module.exports = router;

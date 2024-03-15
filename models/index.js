@@ -29,6 +29,7 @@ db.roles = require("./role.model")(sequelize, DataTypes);
 db.otps = require("./otp.model")(sequelize, DataTypes);
 db.passwordResets = require("./passwordReset.model")(sequelize, DataTypes);
 db.loginOtps = require("./loginOtp.model")(sequelize, DataTypes);
+db.mobileOtps = require("./mobileOtp.model")(sequelize, DataTypes);
 // db.roles.hasOne(db.users);
 
 db.roles.hasMany(db.users, { foreignKey: 'roleId', as: 'user' });
